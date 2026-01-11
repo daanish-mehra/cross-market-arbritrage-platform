@@ -6,11 +6,8 @@ interface ConnectionStatusProps {
 
 export default function ConnectionStatus({ connected }: ConnectionStatusProps) {
   return (
-    <div style={{ marginTop: '0.5rem' }}>
-      <span className={`status ${connected ? 'connected' : 'disconnected'}`}>
-        {connected ? '● Connected' : '● Disconnected'}
-      </span>
+    <div className={`status ${connected ? 'connected' : 'disconnected'}`}>
+      {connected ? 'Connected' : 'Disconnected'}
     </div>
   )
 }
-
