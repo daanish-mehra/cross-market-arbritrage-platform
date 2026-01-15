@@ -10,7 +10,8 @@ set(SOURCES
     src/main.cpp
     src/market_data/polymarket_client.cpp
     src/arbitrage/arbitrage_engine.cpp
+    src/server/websocket_server.cpp
 )
 
 add_executable(arbitrage-platform ${SOURCES})
-target_link_libraries(arbitrage-platform pthread)
+target_link_libraries(arbitrage-platform pthread curl jsoncpp)
