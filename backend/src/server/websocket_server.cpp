@@ -306,6 +306,79 @@ void WebSocketServer::handle_client(int client_fd) {
                     if (bytes_read <= 0) {
                         break;
                     }
+                    
+                    // Parse WebSocket frame
+                    if (bytes_read >= 2) {
+                        unsigned char first_byte = buffer[0];
+                        unsigned char second_byte = buffer[1];
+                        unsigned char opcode = first_byte & 0x0F;
+                        bool masked = (second_byte & 0x80) != 0;
+                        size_t payload_len = second_byte & 0x7F;
+                        
+                        size_t mask_offset = 2;
+                        if (payload_len == 126) {
+                            if (bytes_read < 4) continue;
+                            payload_len = ((unsigned char)buffer[2] << 8) | (unsigned char)buffer[3];
+                            mask_offset = 4;
+                        } else if (payload_len == 127) {
+                            if (bytes_read < 10) continue;
+                            // Skip 64-bit length for simplicity
+                            mask_offset = 10;
+                            payload_len = 0; // Too large, skip
+                        }
+                        
+                        if (masked && bytes_read >= mask_offset + 4) {
+                            unsigned char mask[4];
+                            memcpy(mask, buffer + mask_offset, 4);
+                            size_t payload_offset = mask_offset + 4;
+                            
+                            if (bytes_read >= payload_offset + payload_len && payload_len > 0 && payload_len < 4096) {
+                                std::string payload;
+                                payload.resize(payload_len);
+                                
+                                for (size_t i = 0; i < payload_len; i++) {
+                                    payload[i] = buffer[payload_offset + i] ^ mask[i % 4];
+                                }
+                                
+                                // Handle ping message (opcode 0x9 or JSON ping)
+                                if (opcode == 0x9 || (opcode == 0x1 && payload.find("\"type\":\"ping\"") != std::string::npos)) {
+                                    // Send pong response
+                                    if (opcode == 0x9) {
+                                        // WebSocket ping frame - send pong frame (opcode 0xA)
+                                        unsigned char pong_frame[10];
+                                        size_t pong_frame_len = 2;
+                                        pong_frame[0] = 0x8A; // FIN + Pong opcode
+                                        pong_frame[1] = payload_len;
+                                        if (payload_len < 126) {
+                                            pong_frame[1] = payload_len;
+                                            pong_frame_len = 2;
+                                        } else if (payload_len < 65536) {
+                                            pong_frame[1] = 126;
+                                            pong_frame[2] = (payload_len >> 8) & 0xFF;
+                                            pong_frame[3] = payload_len & 0xFF;
+                                            pong_frame_len = 4;
+                                        }
+                                        send(client_fd, pong_frame, pong_frame_len, 0);
+                                        send(client_fd, payload.c_str(), payload_len, 0);
+                                    } else {
+                                        // JSON ping - respond with JSON pong
+                                        std::string pong_msg = "{\"type\":\"pong\"";
+                                        size_t ts_pos = payload.find("\"timestamp\":");
+                                        if (ts_pos != std::string::npos) {
+                                            size_t ts_start = payload.find(":", ts_pos) + 1;
+                                            size_t ts_end = payload.find_first_of(",}", ts_start);
+                                            if (ts_end != std::string::npos) {
+                                                std::string timestamp = payload.substr(ts_start, ts_end - ts_start);
+                                                pong_msg += ",\"timestamp\":" + timestamp;
+                                            }
+                                        }
+                                        pong_msg += "}";
+                                        send_message(client_fd, pong_msg);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 } else if (activity < 0) {
                     break;
                 }

@@ -3,9 +3,10 @@
 interface SpiderSidebarProps {
   activeTab: string
   onTabChange: (tab: string) => void
+  latency?: number
 }
 
-export default function SpiderSidebar({ activeTab, onTabChange }: SpiderSidebarProps) {
+export default function SpiderSidebar({ activeTab, onTabChange, latency = 0 }: SpiderSidebarProps) {
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'markets', label: 'Markets', icon: '📈' },
@@ -46,10 +47,16 @@ export default function SpiderSidebar({ activeTab, onTabChange }: SpiderSidebarP
         <div className="latency-card">
           <div className="latency-header">
             <span className="latency-label">LATENCY</span>
-            <span className="latency-value">12ms</span>
+            <span className="latency-value">{latency > 0 ? `${latency}ms` : '--'}</span>
           </div>
           <div className="latency-bar">
-            <div className="latency-bar-fill"></div>
+            <div 
+              className="latency-bar-fill" 
+              style={{ 
+                width: `${Math.min(100, (latency / 100) * 100)}%`,
+                backgroundColor: latency < 50 ? '#10b981' : latency < 100 ? '#f59e0b' : '#ef4444'
+              }}
+            ></div>
           </div>
         </div>
       </div>
