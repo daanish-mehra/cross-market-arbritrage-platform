@@ -109,6 +109,15 @@ export default function Home() {
             setLatency(rtt)
           }
         } else if (message.type === 'market_data') {
+          // Debug: Log received market data
+          console.log('Received market data:', {
+            market_id: message.data.market_id,
+            event_name: message.data.event_name,
+            best_bid: message.data.best_bid,
+            best_ask: message.data.best_ask,
+            bid_size: message.data.bid_size,
+            ask_size: message.data.ask_size
+          })
           marketDataBuffer.set(message.data.market_id, message.data)
         } else if (message.type === 'opportunity') {
           setOpportunities(prev => {

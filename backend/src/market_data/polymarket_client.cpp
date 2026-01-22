@@ -68,20 +68,60 @@ static bool parse_orderbook(const std::string& json, double& best_bid, double& b
     if (bids_pos != std::string::npos) {
         size_t array_start = json.find("[", bids_pos);
         if (array_start != std::string::npos && json[array_start + 1] != ']') {
-            // Has bids
+            // Has bids - try quoted string first, then numeric
             size_t price_pos = json.find("\"price\":\"", array_start);
             if (price_pos != std::string::npos) {
+                // Quoted string format: "price":"0.5"
                 price_pos += 9; // Skip "price":"
                 size_t price_end = json.find("\"", price_pos);
                 std::string bid_price_str = json.substr(price_pos, price_end - price_pos);
                 best_bid = atof(bid_price_str.c_str());
-                
-                size_t size_pos = json.find("\"size\":\"", price_end);
-                if (size_pos != std::string::npos) {
+            } else {
+                // Numeric format: "price":0.5
+                price_pos = json.find("\"price\":", array_start);
+                if (price_pos != std::string::npos) {
+                    price_pos += 8; // Skip "price":
+                    // Find end of number (comma, }, or whitespace)
+                    size_t price_end = price_pos;
+                    while (price_end < json.length() && 
+                           json[price_end] != ',' && 
+                           json[price_end] != '}' && 
+                           json[price_end] != ' ' &&
+                           json[price_end] != '\n' &&
+                           json[price_end] != '\r') {
+                        price_end++;
+                    }
+                    std::string bid_price_str = json.substr(price_pos, price_end - price_pos);
+                    best_bid = atof(bid_price_str.c_str());
+                }
+            }
+            
+            if (best_bid > 0.0) {
+                // Parse size - try quoted string first, then numeric
+                size_t size_pos = json.find("\"size\":\"", array_start);
+                if (size_pos != std::string::npos && size_pos > array_start) {
+                    // Quoted string format
                     size_pos += 8; // Skip "size":"
                     size_t size_end = json.find("\"", size_pos);
                     std::string bid_size_str = json.substr(size_pos, size_end - size_pos);
                     bid_size = atof(bid_size_str.c_str());
+                } else {
+                    // Numeric format: "size":100.0
+                    size_pos = json.find("\"size\":", array_start);
+                    if (size_pos != std::string::npos && size_pos > array_start) {
+                        size_pos += 7; // Skip "size":
+                        size_t size_end = size_pos;
+                        while (size_end < json.length() && 
+                               json[size_end] != ',' && 
+                               json[size_end] != '}' && 
+                               json[size_end] != ' ' &&
+                               json[size_end] != '\n' &&
+                               json[size_end] != '\r') {
+                            size_end++;
+                        }
+                        std::string bid_size_str = json.substr(size_pos, size_end - size_pos);
+                        bid_size = atof(bid_size_str.c_str());
+                    }
                 }
             }
         }
@@ -92,20 +132,60 @@ static bool parse_orderbook(const std::string& json, double& best_bid, double& b
     if (asks_pos != std::string::npos) {
         size_t array_start = json.find("[", asks_pos);
         if (array_start != std::string::npos && json[array_start + 1] != ']') {
-            // Has asks
+            // Has asks - try quoted string first, then numeric
             size_t price_pos = json.find("\"price\":\"", array_start);
             if (price_pos != std::string::npos) {
+                // Quoted string format: "price":"0.5"
                 price_pos += 9; // Skip "price":"
                 size_t price_end = json.find("\"", price_pos);
                 std::string ask_price_str = json.substr(price_pos, price_end - price_pos);
                 best_ask = atof(ask_price_str.c_str());
-                
-                size_t size_pos = json.find("\"size\":\"", price_end);
-                if (size_pos != std::string::npos) {
+            } else {
+                // Numeric format: "price":0.5
+                price_pos = json.find("\"price\":", array_start);
+                if (price_pos != std::string::npos) {
+                    price_pos += 8; // Skip "price":
+                    // Find end of number (comma, }, or whitespace)
+                    size_t price_end = price_pos;
+                    while (price_end < json.length() && 
+                           json[price_end] != ',' && 
+                           json[price_end] != '}' && 
+                           json[price_end] != ' ' &&
+                           json[price_end] != '\n' &&
+                           json[price_end] != '\r') {
+                        price_end++;
+                    }
+                    std::string ask_price_str = json.substr(price_pos, price_end - price_pos);
+                    best_ask = atof(ask_price_str.c_str());
+                }
+            }
+            
+            if (best_ask > 0.0) {
+                // Parse size - try quoted string first, then numeric
+                size_t size_pos = json.find("\"size\":\"", array_start);
+                if (size_pos != std::string::npos && size_pos > array_start) {
+                    // Quoted string format
                     size_pos += 8; // Skip "size":"
                     size_t size_end = json.find("\"", size_pos);
                     std::string ask_size_str = json.substr(size_pos, size_end - size_pos);
                     ask_size = atof(ask_size_str.c_str());
+                } else {
+                    // Numeric format: "size":100.0
+                    size_pos = json.find("\"size\":", array_start);
+                    if (size_pos != std::string::npos && size_pos > array_start) {
+                        size_pos += 7; // Skip "size":
+                        size_t size_end = size_pos;
+                        while (size_end < json.length() && 
+                               json[size_end] != ',' && 
+                               json[size_end] != '}' && 
+                               json[size_end] != ' ' &&
+                               json[size_end] != '\n' &&
+                               json[size_end] != '\r') {
+                            size_end++;
+                        }
+                        std::string ask_size_str = json.substr(size_pos, size_end - size_pos);
+                        ask_size = atof(ask_size_str.c_str());
+                    }
                 }
             }
         }
@@ -260,18 +340,45 @@ void* thread_function(void* arg) {
                 data.is_valid = false;
                 
                 if (!response.empty()) {
-                    double best_bid = 0.0;
-                    double best_ask = 0.0;
-                    double bid_size = 0.0;
-                    double ask_size = 0.0;
-                    
-                    if (parse_orderbook(response, best_bid, best_ask, bid_size, ask_size)) {
-                        data.best_bid = best_bid;
-                        data.best_ask = best_ask;
-                        data.bid_size = bid_size;
-                        data.ask_size = ask_size;
-                        data.is_valid = true;
+                    // Check for error response
+                    if (response.find("\"error\"") != std::string::npos) {
+                        // Market has no orderbook - this is normal for some markets
+                        data.best_bid = 0.0;
+                        data.best_ask = 0.0;
+                        data.bid_size = 0.0;
+                        data.ask_size = 0.0;
+                        data.is_valid = false;
+                    } else {
+                        double best_bid = 0.0;
+                        double best_ask = 0.0;
+                        double bid_size = 0.0;
+                        double ask_size = 0.0;
+                        
+                        if (parse_orderbook(response, best_bid, best_ask, bid_size, ask_size)) {
+                            data.best_bid = best_bid;
+                            data.best_ask = best_ask;
+                            data.bid_size = bid_size;
+                            data.ask_size = ask_size;
+                            data.is_valid = true;
+                            std::cout << "Market: " << market.event_name.substr(0, 40) 
+                                      << " | Bid: " << best_bid 
+                                      << " | Ask: " << best_ask 
+                                      << " | Prob: " << ((best_bid + best_ask) / 2.0 * 100.0) << "%" << std::endl;
+                        } else {
+                            // No valid orderbook data found
+                            data.best_bid = 0.0;
+                            data.best_ask = 0.0;
+                            data.bid_size = 0.0;
+                            data.ask_size = 0.0;
+                            data.is_valid = false;
+                        }
                     }
+                } else {
+                    data.best_bid = 0.0;
+                    data.best_ask = 0.0;
+                    data.bid_size = 0.0;
+                    data.ask_size = 0.0;
+                    data.is_valid = false;
                 }
                 
                 // Send market data even if orderbook is empty (so all markets show up)
