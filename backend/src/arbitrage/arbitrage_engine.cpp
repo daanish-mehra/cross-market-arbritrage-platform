@@ -2,6 +2,7 @@
 #include "types.h"
 #include <map>
 #include <string>
+#include <vector>
 #include <pthread.h>
 
 struct MarketDataMap {
@@ -52,48 +53,59 @@ void ArbitrageEngine::check_for_opportunities() {
     MarketDataMap* mdm = (MarketDataMap*)market_data_map;
     pthread_mutex_lock(&mdm->mutex);
     
-    std::map<std::string, MarketData>::iterator it1;
-    std::map<std::string, MarketData>::iterator it2;
-    
-    for (it1 = mdm->data.begin(); it1 != mdm->data.end(); ++it1) {
-        for (it2 = mdm->data.begin(); it2 != mdm->data.end(); ++it2) {
-            if (it1 == it2) {
-                continue;
-            }
-            
-            MarketData* data1 = &it1->second;
-            MarketData* data2 = &it2->second;
-            
-            if (data1->event_name != data2->event_name) {
-                continue;
-            }
-            
-            if (data1->market == data2->market) {
-                continue;
-            }
-            
-            double profit = compute_profit(data1, data2);
-            
-            if (profit > config->min_profit_threshold) {
-                ArbitrageOpportunity opp;
-                opp.event_id = data1->event_name;
-                opp.buy_market = data1->market;
-                opp.sell_market = data2->market;
-                opp.buy_price = data1->best_ask;
-                opp.sell_price = data2->best_bid;
-                opp.profit_percentage = profit;
-                opp.max_size = compute_max_size(data1, data2);
-                
-                pthread_mutex_unlock(&mdm->mutex);
-                if (opportunity_callback != NULL) {
-                    opportunity_callback(&opp);
-                }
-                pthread_mutex_lock(&mdm->mutex);
-            }
-        }
+    // O(n): Group markets by event_name first
+    // This reduces complexity from O(n²) to O(n + k²×e)
+    // where k = markets per event (typically 2-3), e = unique events
+    std::map<std::string, std::vector<MarketData*>> events_map;
+    for (std::map<std::string, MarketData>::iterator it = mdm->data.begin(); 
+         it != mdm->data.end(); ++it) {
+        events_map[it->second.event_name].push_back(&it->second);
     }
     
     pthread_mutex_unlock(&mdm->mutex);
+    
+    // O(k²×e): Only compare markets within the same event
+    // For each event, compare pairs of markets (typically 2-3 markets per event)
+    for (std::map<std::string, std::vector<MarketData*>>::iterator event_it = events_map.begin();
+         event_it != events_map.end(); ++event_it) {
+        
+        std::vector<MarketData*>& markets = event_it->second;
+        
+        // Skip if less than 2 markets for this event
+        if (markets.size() < 2) {
+            continue;
+        }
+        
+        // Compare all pairs of markets for this event
+        for (size_t i = 0; i < markets.size(); i++) {
+            for (size_t j = i + 1; j < markets.size(); j++) {
+                MarketData* data1 = markets[i];
+                MarketData* data2 = markets[j];
+                
+                // Skip if same market (shouldn't happen, but safety check)
+                if (data1->market == data2->market) {
+                    continue;
+                }
+                
+                double profit = compute_profit(data1, data2);
+                
+                if (profit > config->min_profit_threshold) {
+                    ArbitrageOpportunity opp;
+                    opp.event_id = data1->event_name;
+                    opp.buy_market = data1->market;
+                    opp.sell_market = data2->market;
+                    opp.buy_price = data1->best_ask;
+                    opp.sell_price = data2->best_bid;
+                    opp.profit_percentage = profit;
+                    opp.max_size = compute_max_size(data1, data2);
+                    
+                    if (opportunity_callback != NULL) {
+                        opportunity_callback(&opp);
+                    }
+                }
+            }
+        }
+    }
 }
 
 double ArbitrageEngine::compute_profit(MarketData* buy, MarketData* sell) {
